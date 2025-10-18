@@ -1,62 +1,75 @@
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import apiClient from "../apiClient"
+// src/pages/HistoryPage.jsx
+import { useState } from 'react';
+import Card from '../component/Card';
+import Input from '../component/Input';
+import Button from "../component/Button"
+import { Link } from 'react-router-dom';
+import api from '../apiClient';
 
 const HistoryPage = () => {
   const [email, setEmail] = useState('');
   const [tests, setTests] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const fetchHistory = async () => {
-    if (!email) return;
+  const search = async () => {
+    if (!/\S+@\S+\.\S+/.test(email)) return;
+    setLoading(true);
     try {
-      const res = await apiClient.get('/tests', { params: { userEmail: email } });
+      const res = await api.get('/tests', { params: { userEmail: email, page: 1, limit: 10 } });
       setTests(res.data.data.tests);
-    } catch {
-      toast.error('Failed to load history');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8 bg-white rounded-xl shadow-md mt-12">
-      <h1 className="text-3xl mb-6 text-center">Test History</h1>
-      <input
-        type="email"
-        placeholder="Enter your email"
-        className="w-full border border-gray-300 rounded py-2 px-3 mb-6"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <button
-        className="bg-indigo-600 text-white rounded py-2 w-full hover:bg-indigo-700 mb-8"
-        onClick={fetchHistory}
-      >
-        Load History
-      </button>
+    <div className="mt-6 space-y-6">
+      <Card title="Find your past tests" subtitle="Enter the email you used when creating tests.">
+        <div className="grid sm:grid-cols-[1fr_auto] gap-3">
+          <Input
+            label="Email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e)=>setEmail(e.target.value)}
+          />
+          <div className="self-end">
+            <Button onClick={search} disabled={loading}>{loading ? 'Searching…' : 'Search'}</Button>
+          </div>
+        </div>
+      </Card>
 
-      {tests.length === 0 && <p>No tests found for this email address.</p>}
-
-      {tests.length > 0 && (
-        <table className="w-full text-left border-collapse border border-gray-300 text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border border-gray-300 px-3 py-2">Test Code</th>
-              <th className="border border-gray-300 px-3 py-2">Status</th>
-              <th className="border border-gray-300 px-3 py-2">Score</th>
-              <th className="border border-gray-300 px-3 py-2">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tests.map(test => (
-              <tr key={test._id}>
-                <td className="border border-gray-300 px-3 py-2 font-mono">{test.testCode}</td>
-                <td className="border border-gray-300 px-3 py-2">{test.status}</td>
-                <td className="border border-gray-300 px-3 py-2">{test.deliverabilityScore ?? '-'}</td>
-                <td className="border border-gray-300 px-3 py-2">{new Date(test.createdAt).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <Card title="Results">
+        {tests.length === 0 ? (
+          <p className="text-sm text-slate-600">No tests yet. Try a different email or run a new test.</p>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-sm border border-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left px-3 py-2 border-b">Code</th>
+                  <th className="text-left px-3 py-2 border-b">Status</th>
+                  <th className="text-left px-3 py-2 border-b">Score</th>
+                  <th className="text-left px-3 py-2 border-b">Created</th>
+                  <th className="text-left px-3 py-2 border-b">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tests.map(t => (
+                  <tr key={t._id} className="border-b">
+                    <td className="px-3 py-2 font-mono">{t.testCode}</td>
+                    <td className="px-3 py-2">{t.status}</td>
+                    <td className="px-3 py-2">{t.deliverabilityScore ?? '-'}</td>
+                    <td className="px-3 py-2">{new Date(t.createdAt).toLocaleString()}</td>
+                    <td className="px-3 py-2">
+                      <Link to={`/report/${t._id}`} className="text-indigo-700 hover:underline">View report</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 };

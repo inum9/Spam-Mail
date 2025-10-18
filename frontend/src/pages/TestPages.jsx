@@ -1,70 +1,85 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
-import apiClient from '../apiClient';
+// src/pages/TestPage.jsx
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import Card from '../component/Card';
+import Button from '../component/Button';
+import InlineCopy from '../component/InlineCopy';
+import api from '../apiClient';
 
 const TestPage = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
-  const [test, setTest] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [checking, setChecking] = useState(false);
+  const [data, setData] = useState(null);
+  const [starting, setStarting] = useState(false);
+  const pollRef = useRef(null);
+
+  const load = async () => {
+    const res = await api.get(`/tests/${testId}`);
+    setData(res.data.data);
+    if (res.data.data.status === 'completed') {
+      clearInterval(pollRef.current);
+      navigate(`/report/${testId}`);
+    }
+  };
 
   useEffect(() => {
-    fetchTest();
-  }, []);
-
-  const fetchTest = async () => {
-    try {
-      const response = await apiClient.get(`/tests/${testId}`);
-      setTest(response.data.data);
-      if (response.data.data.status === 'completed') {
-        navigate(`/report/${testId}`);
-      }
-    } catch (err) {
-      toast.error('Failed to load test');
-    } finally {
-      setLoading(false);
-    }
-  };
+    load();
+    return () => clearInterval(pollRef.current);
+  }, [testId]);
 
   const startCheck = async () => {
-    setChecking(true);
+    setStarting(true);
     try {
-      await apiClient.post(`/tests/${testId}/check`);
-      toast.success('Test check started!');
-      // Poll periodically or navigate to report after delay
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to start test check');
+      await api.post(`/tests/${testId}/check`);
+      pollRef.current = setInterval(load, 4000);
     } finally {
-      setChecking(false);
+      setStarting(false);
     }
   };
 
-  if (loading) return <p>Loading...</p>;
+  if (!data) return <p className="mt-6">Loading…</p>;
 
   return (
-    <div className="max-w-lg mx-auto bg-white rounded-xl shadow-md p-8 mt-12 text-center">
-      <h2 className="text-xl mb-4">Your Test Code</h2>
-      <div className="mb-6 text-indigo-700 font-mono text-3xl">{test.testCode}</div>
-      <p className="mb-4">Send an email to the listed inboxes with this code in the subject or body.</p>
-      <ul className="mb-6 list-disc list-inside text-left">
-        {test.results.map((inbox, i) => (
-          <li key={i} className="text-gray-700">
-            {inbox.email}
-          </li>
-        ))}
-      </ul>
-      {test.status === 'pending' && (
-        <button
-          onClick={startCheck}
-          disabled={checking}
-          className="bg-indigo-600 text-white rounded py-3 px-4 hover:bg-indigo-700 transition"
-        >
-          {checking ? 'Starting...' : 'Start Check'}
-        </button>
-      )}
-      {test.status === 'processing' && <p className="text-yellow-500">Processing test... Please wait.</p>}
+    <div className="grid lg:grid-cols-2 gap-6 mt-6">
+      <Card title="Your test code" subtitle="Include this in subject or body of your email.">
+        <div className="flex items-center justify-between">
+          <InlineCopy value={data.testCode} />
+          <span className="text-xs text-slate-500">Required for detection</span>
+        </div>
+      </Card>
+
+      <Card title="Send to these inboxes" subtitle="Send one email to all addresses below.">
+        <ul className="space-y-2">
+          {data.results?.map((r, i) => (
+            <li key={i} className="flex items-center justify-between">
+              <span className="font-mono text-sm text-slate-800">{r.email}</span>
+              <InlineCopy value={r.email} />
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card title="Start analysis" subtitle="Click after you’ve sent the email.">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-slate-600">
+            Status: <span className="font-medium">{data.status}</span>
+          </div>
+          {data.status === 'pending' && (
+            <Button onClick={startCheck} disabled={starting}> {starting ? 'Starting…' : 'Start Check'} </Button>
+          )}
+          {data.status === 'processing' && (
+            <span className="text-amber-600 text-sm">Processing… auto-refreshing</span>
+          )}
+        </div>
+      </Card>
+
+      <Card title="Tips" subtitle="Improve accuracy of detection.">
+        <ul className="text-sm text-slate-700 space-y-2 list-disc pl-5">
+          <li>Send within 5 minutes to avoid timeouts.</li>
+          <li>Keep subject minimal except the code for clearer matching.</li>
+          <li>Avoid attachments on the first test for speed.</li>
+        </ul>
+      </Card>
     </div>
   );
 };
